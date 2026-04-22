@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pro Sheet → JSON</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    :root{
+      --bg:#0f172a;
+      --card:#1e293b;
+      --accent:#6366f1;
+      --text:#e2e8f0;
+    }
+
+    body{
+      margin:0;
+      font-family:system-ui;
+      background:var(--bg);
+      color:var(--text);
+    }
+
+    header{
+      padding:15px;
+      text-align:center;
+      font-size:20px;
+      font-weight:bold;
+      background:#020617;
+    }
+
+    .container{
+      max-width:600px;
+      margin:auto;
+      padding:15px;
+    }
+
+    .card{
+      background:var(--card);
+      padding:15px;
+      border-radius:15px;
+      margin-bottom:15px;
+    }
+
+    input{
+      width:100%;
+      padding:12px;
+      margin:6px 0;
+      border-radius:8px;
+      border:none;
+      background:#020617;
+      color:white;
+    }
+
+    button{
+      width:100%;
+      padding:12px;
+      margin-top:10px;
+      border:none;
+      border-radius:10px;
+      background:var(--accent);
+      color:white;
+      font-size:15px;
+      cursor:pointer;
+    }
+
+    .row{
+      display:flex;
+      gap:10px;
+    }
+
+    .row button{
+      flex:1;
+    }
+
+    textarea{
+      width:100%;
+      height:220px;
+      background:#020617;
+      color:#22c55e;
+      border:none;
+      border-radius:10px;
+      padding:10px;
+      font-size:12px;
+    }
+
+    .tabs{
+      display:flex;
+      gap:10px;
+      margin-bottom:10px;
+    }
+
+    .tab{
+      flex:1;
+      padding:10px;
+      text-align:center;
+      background:#020617;
+      border-radius:8px;
+      cursor:pointer;
+    }
+
+    .active{
+      background:var(--accent);
+    }
+
+    .hidden{
+      display:none;
+    }
+
+    .loader{
+      text-align:center;
+      margin-top:10px;
+      color:#38bdf8;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>🚀 Pro Sheet → JSON Converter</header>
+
+<div class="container">
+
+  <div class="card">
+    <input id="sheetId" placeholder="Paste Sheet ID">
+    <input id="sheetNames" placeholder="Add-Day1,Add-Day2">
+    <button onclick="convert()">Convert</button>
+    <div class="loader" id="loader"></div>
+  </div>
+
+  <div class="card">
+
+    <div class="tabs">
+      <div class="tab active" onclick="showTab('json')">JSON</div>
+      <div class="tab" onclick="showTab('preview')">Preview</div>
+    </div>
+
+    <div id="jsonTab">
+      <textarea id="output"></textarea>
+      <div class="row">
+        <button onclick="copyJSON()">Copy</button>
+        <button onclick="downloadJSON()">Download</button>
+      </div>
+    </div>
+
+    <div id="previewTab" class="hidden"></div>
+
+  </div>
+
+</div>
+
+<script>
+
+let finalData = {};
+
+async function convert(){
+
+  let sheetId = document.getElementById("sheetId").value.trim();
+  let names = document.getElementById("sheetNames").value.split(",");
+
+  let loader = document.getElementById("loader");
+  loader.innerText = "⏳ Loading...";
+
+  finalData = {};
+
+  for(let name of names){
+
+    let sheetName = name.trim();
+    let url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+
+    let res = await fetch(url);
+    let csv = await res.text();
+
+    let rows = csv.trim().split("\n");
+    let result = [];
+
+    rows.forEach(row => {
+
+      let cols = row.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g);
+
+      if(cols && cols.length >= 6){
+
+        result.push({
+          q: cols[0].replace(/"/g,''),
+          options: [
+            cols[1].replace(/"/g,''),
+            cols[2].replace(/"/g,''),
+            cols[3].replace(/"/g,''),
+            cols[4].replace(/"/g,'')
+          ],
+          answer: cols[5].replace(/"/g,'')
+        });
+
+      }
+
+    });
+
+    finalData[sheetName] = result;
+  }
+
+  document.getElementById("output").value =
+    JSON.stringify(finalData, null, 2);
+
+  loader.innerText = "✅ Done";
+
+  renderPreview();
+}
+
+function copyJSON(){
+  let t = document.getElementById("output");
+  t.select();
+  document.execCommand("copy");
+}
+
+function downloadJSON(){
+  let blob = new Blob([JSON.stringify(finalData)], {type:"application/json"});
+  let a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "data.json";
+  a.click();
+}
+
+function showTab(tab){
+
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  document.querySelectorAll(".tab")[tab==="json"?0:1].classList.add("active");
+
+  document.getElementById("jsonTab").classList.toggle("hidden", tab!=="json");
+  document.getElementById("previewTab").classList.toggle("hidden", tab!=="preview");
+}
+
+function renderPreview(){
+
+  let preview = document.getElementById("previewTab");
+  let html = "";
+
+  for(let day in finalData){
+
+    html += `<h3>${day}</h3>`;
+
+    finalData[day].forEach(q => {
+      html += `<div style="margin-bottom:10px;">
+        <b>${q.q}</b><br>
+        ${q.options.join(" | ")}
+      </div>`;
+    });
+  }
+
+  preview.innerHTML = html;
+}
+
+</script>
+
+</body>
+</html>
